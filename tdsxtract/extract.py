@@ -3,11 +3,12 @@
 # Author: Benjamin Vial
 # License: MIT
 
+import sys
+
+import scipy.signal as signal
+from optim import *
 from pltstyle import *
 from scipy.constants import c
-from optim import *
-import scipy.signal as signal
-import sys
 from scipy.interpolate import interp1d
 
 
@@ -134,7 +135,7 @@ if film:
     if case == "meta":
         eps_substrate = 12.389 - 0.0715j  ## silicon
     else:
-        eps_substrate = 9.40630913-0.03536057j#03651004j  ## sapphire
+        eps_substrate = 9.40630913 - 0.03536057j  # 03651004j  ## sapphire
 else:
     eps_substrate = 1.0 - 0.0j
 
@@ -143,7 +144,7 @@ wl_load = c / freqs_load * 1e6
 
 eps_array = [wl_load, np.flipud(epsilon_smooth_load)]
 eps_array = [wl_load, np.flipud(epsilon_load)]
-eps_array = [wl_load, np.ones_like(wl_load)*epsilon_mean_load]
+eps_array = [wl_load, np.ones_like(wl_load) * epsilon_mean_load]
 # eps_array = None
 
 ##############################################################################
@@ -362,7 +363,6 @@ if __name__ == "__main__":
         method="L-BFGS-B",
     )
 
-
     # epsilon = (x[0] + 1j * x[1])*ones
     hopt = opt.x[-1]
     _epsopt = opt.x[:-1]
@@ -542,12 +542,18 @@ if __name__ == "__main__":
         freqs=freqs,
         t_experiment=t_experiment,
     )
-    
-    data = np.vstack((freqs/1e12,eps_smooth.real,eps_smooth.imag)).T
-    
+
+    data = np.vstack((freqs / 1e12, eps_smooth.real, eps_smooth.imag)).T
+
     import numpy as npo
-    
-    npo.savetxt("epsilon_BST.csv", data, fmt="%f",delimiter=",", header="frequency (THz), Re epsilon, Imag epsilon")
+
+    npo.savetxt(
+        "epsilon_BST.csv",
+        data,
+        fmt="%f",
+        delimiter=",",
+        header="frequency (THz), Re epsilon, Imag epsilon",
+    )
 
     # ### test dispersive
     #

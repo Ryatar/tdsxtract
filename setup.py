@@ -20,6 +20,7 @@ required = [
     "scipy",
     "matplotlib",
     "jax",
+    "jaxlib",
 ]
 
 _classifiers = [

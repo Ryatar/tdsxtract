@@ -16,8 +16,10 @@ def load(filename):
 
     Returns
     -------
-    tuple (position, voltage)
-        position of the delay satge (in microns) and signal amplitude (in V).
+    position: array
+        position of the delay stage (in microns)
+    voltage: array
+        signal amplitude (in mV).
 
     """
     data = npo.loadtxt(filename, skiprows=13)

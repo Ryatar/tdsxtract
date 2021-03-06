@@ -5,16 +5,30 @@
 
 
 from collections import OrderedDict
-from jax import grad
+
 import jax.numpy as np
-from jax import vjp
-from jax import jit
-# import numpy as np
+from jax import grad, jit, vjp
+from jax.config import config
 from scipy.constants import c, epsilon_0, mu_0
+
+from .helpers import ordered_dict_insert
+
+config.update("jax_enable_x64", True)
 
 inv = np.linalg.inv
 
 pi = np.pi
+
+
+# class Sample(OrderedDict):
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+#
+#     @property
+#     def thickness(self):
+#         return sum([k["thickness"] for lay,k in self.items()])
+
+Sample = OrderedDict
 
 
 def get_coeffs_stack(config):
@@ -31,6 +45,16 @@ def get_coeffs_stack(config):
 
     eps = [d["epsilon"] for d in layers.values()]
     eps = [e if not callable(e) else e(lambda0) for e in eps]
+
+    for ie, e in enumerate(eps):
+        if isinstance(e, tuple):
+            if len(e) == 2:
+                wl, eps_ = e
+                eps[ie] = np.interp(lambda0, wl, eps_)
+            else:
+                raise (ValueError)
+        else:
+            eps[ie] = e
     mu = [d["mu"] for d in layers.values()]
     thicknesses = [d["thickness"] for d in layers.values() if "thickness" in d.keys()]
 
@@ -168,13 +192,38 @@ def get_coeffs_stack(config):
             + 2 * alpha0 * beta0 * np.real(phi[-1][0] * phi[-1][2].conjugate())
         )
     )
+    return phi, alpha0, beta0, gamma, R, T
+    # return phi[-1][0], gamma
 
-    # print(R)
-    # print(T)
-    # print(R + T)
 
-    # return phi, alpha0, beta0, gamma, R, T
-    return phi[-1][0], gamma
+def make_layers(layers, sample):
+    new = layers.copy()
+    for i, lays in enumerate(sample.items()):
+        new = ordered_dict_insert(layers, i + 1, *lays)
+    return new
+
+
+def get_transmission(sample, lambda0):
+    wave = {
+        "lambda0": lambda0,
+        "theta0": 0.0,
+        "phi0": 0.0,
+        "psi0": 0.0,
+    }
+
+    layers = OrderedDict(
+        {
+            "input medium": {"epsilon": 1.0, "mu": 1.0},
+            "output medium": {"epsilon": 1.0, "mu": 1.0},
+        }
+    )
+
+    layers = make_layers(layers, sample)
+
+    config = dict(layers=layers, wave=wave)
+
+    out = get_coeffs_stack(config)
+    return out[0][-1][0]
 
 
 if __name__ == "__main__":

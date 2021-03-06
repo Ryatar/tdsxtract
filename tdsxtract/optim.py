@@ -3,69 +3,54 @@
 # Author: Benjamin Vial
 # License: MIT
 
-from stack import *
-from scipy.optimize import minimize
+import numpy as npo
 from jax import vmap
-import numpy
+from scipy.optimize import minimize
 
-# from jax.config import config
-# config.update("jax_enable_x64", True)
+from .stack import *
 
 
-def trans_stack(epsilon, thickness, config=None, wl=None,eps_fun=None):
+def sample_transmission(epsilons, thickness, sample=None, wavelengths=None):
+    unknown = "unknown"
     t = []
+    sample[unknown]["thickness"] = thickness
 
-    def _t(pars):
-        lambda0, eps = pars
-        # for lambda0, eps in zip(wl, epsilon):
-        config["layers"]["unknown"]["epsilon"] = eps
-        config["layers"]["unknown"]["thickness"] = thickness
-        config["wave"]["lambda0"] = lambda0
-        
-        if eps_fun is not None:
-            a,b = eps_fun
-            config["layers"]["layer subs"]["epsilon"] = np.interp(lambda0, a,b)
-            # config["layers"]["layer subs"]["epsilon"] = eps_fun(lambda0)
-        # 
-        # layers, wave = config["layers"], config["wave"]
-        # eps = [d["epsilon"] for d in layers.values()]
-        # eps = [e if not callable(e) else e(lambda0) for e in eps]
-        # for l,e in zip(config["layers"],eps):
-        #     config["layers"][l]["epsilon"] =e
-            
-        
-        
-        t, gamma = get_coeffs_stack(config)
+    def _t(params):
+        lambda0, eps = params
+        sample[unknown]["epsilon"] = eps
+        t = get_transmission(sample, lambda0)
         return t
-        # t.append(out)
 
-    pars = wl, epsilon
-    t = vmap(_t)(pars)
+    params = wavelengths, epsilons
+    t = vmap(_t)(params)
     return np.array(t)
 
 
 @jit
-def fmini(x, config=None, t_exp=None, weights=(1, 1), wl=None,eps_fun=None, stats=False):
-    # epsilon = (x[0] + 1j * x[1])*ones
-    nl = len(wl)
-    thickness = x[-1]
-    x_ = x[:-1]
+def fmini(
+    x, sample=None, t_exp=None, wavelengths=None, weights=(1, 0), opt_thickness=None,
+):
+    unknown = "unknown"
+    nl = len(wavelengths)
+    if opt_thickness != None:
+        thickness = x[-1]
+        sample[unknown]["thickness"] = thickness
+        x_ = x[:-1]
+    else:
+        thickness = sample[unknown]["thickness"]
+        x_ = x
     epsilon = x_[:nl] + 1j * x_[nl:]
-    # freq = 1 / wl
-    
-    config["layers"]["unknown"]["thickness"] = thickness
+    gamma = 2 * pi / wavelengths
+    thickness_tot = sum([k["thickness"] for lay, k in sample.items()])
+    phasor = np.exp(-1j * gamma * thickness_tot)
+    t_exp_phased = t_exp * phasor
 
-    layers, wave = config["layers"], config["wave"]
-    
-    thicknesses = [d["thickness"] for d in layers.values() if "thickness" in d.keys()]
-
-    hphase = sum(thicknesses)
-    gamma = 2 * pi / wl
-    phasor = np.exp(-1j * gamma * hphase)
-    t_exp1 = t_exp*phasor
-
-    t_model = trans_stack(epsilon, thickness, config=config, wl=wl,eps_fun=eps_fun)
-    mse_func = np.mean(np.abs(t_exp1 - t_model) ** 2)# / np.mean(np.abs(t_exp1) ** 2)
+    t_model = sample_transmission(
+        epsilon, thickness, sample=sample, wavelengths=wavelengths
+    )
+    mse_func = np.mean(
+        np.abs(t_exp_phased - t_model) ** 2
+    )  # / np.mean(np.abs(t_exp_phased) ** 2)
     # epsmax,epsmin = np.max((epsilon)),np.min((epsilon))
     # deps= np.abs(epsmax-epsmin)
     #
@@ -76,10 +61,7 @@ def fmini(x, config=None, t_exp=None, weights=(1, 1), wl=None,eps_fun=None, stat
     )  # * np.mean(np.abs( freq/ epsilon)**2)
     mse = weights[0] * mse_func + weights[1] * mse_grad
 
-    if stats:
-        return mse_func, mse_grad
-    else:
-        return mse
+    return mse
 
 
 jac_ = grad(fmini)
@@ -88,4 +70,97 @@ jit_gfunc = jit(jac_)
 
 
 def jac(x, **kwargs):
-    return numpy.float64(jit_gfunc(x, **kwargs))
+    return npo.array(jit_gfunc(x, **kwargs))
+
+
+def extract(
+    sample,
+    wavelengths,
+    t_exp,
+    epsilon_initial_guess=None,
+    eps_re_min=None,
+    eps_re_max=None,
+    eps_im_min=None,
+    eps_im_max=None,
+    thickness_tol=0,
+    opt_thickness=None,
+    weight=1,
+):
+
+    h = sample["unknown"]["thickness"]
+    nl = len(wavelengths)
+    ones = npo.ones_like(wavelengths)
+
+    # passiv = 1 - float(force_passive)
+
+    if epsilon_initial_guess == None:
+        epsilon_initial_guess = 1 + 0j
+    eps_re0 = epsilon_initial_guess.real * ones
+    eps_im0 = epsilon_initial_guess.imag * ones
+
+    eps_re_min = float(eps_re_min) if eps_re_min is not None else None
+    eps_re_max = float(eps_re_max) if eps_re_max is not None else None
+    eps_im_min = float(eps_im_min) if eps_im_min is not None else None
+    eps_im_max = float(eps_im_max) if eps_im_max is not None else None
+
+    hmin, hmax = (1 - thickness_tol) * h, (1 + thickness_tol) * h
+    x0 = [eps_re0, eps_im0]
+    if opt_thickness != None:
+        x0.append(h)
+    initial_guess = npo.float64(npo.hstack(x0))
+    bounds = [(eps_re_min, eps_re_max) for i in range(nl)]
+    bounds += [(eps_im_min, eps_im_max) for i in range(nl)]
+    if opt_thickness != None:
+        bounds += [(hmin, hmax)]
+    bounds = npo.float64(bounds)
+
+    weights = (float(weight), float(1 - weight))
+
+    fmini_opt = lambda x: fmini(
+        x,
+        sample=sample,
+        weights=weights,
+        t_exp=t_exp,
+        wavelengths=wavelengths,
+        opt_thickness=opt_thickness,
+    )
+    jac_opt = lambda x: jac(
+        x,
+        sample=sample,
+        weights=weights,
+        t_exp=t_exp,
+        wavelengths=wavelengths,
+        opt_thickness=opt_thickness,
+    )
+
+    options = {
+        "disp": True,
+        "maxcor": 250,
+        "ftol": 1e-16,
+        "gtol": 1e-16,
+        "eps": 1e-11,
+        "maxfun": 15000,
+        "maxiter": 15000,
+        "iprint": 1,
+        "maxls": 200,
+        "finite_diff_rel_step": None,
+    }
+
+    opt = minimize(
+        fmini_opt,
+        initial_guess,
+        bounds=bounds,
+        tol=1e-16,
+        options=options,
+        jac=jac_opt,
+        method="L-BFGS-B",
+    )
+    if opt_thickness != None:
+        h_opt = opt.x[-1]
+        _epsopt = opt.x[:-1]
+    else:
+        h_opt = h
+        _epsopt = opt.x
+
+    epsilon_opt = _epsopt[:nl] + 1j * _epsopt[nl:]
+    return epsilon_opt, h_opt, opt
