@@ -106,7 +106,7 @@ gl:
 	git add -A
 	@read -p "Enter commit message: " MSG; \
 	git commit -a -m "$$MSG"
-	git push origin master
+	git push origin main
 
 ## Clean, reformat and push to gitlab
 save: clean style gl
@@ -138,8 +138,8 @@ test:
 
 ## Tag and push tags
 tag: banner
-	# Make sure we're on the master branch
-	@if [ "$(shell git rev-parse --abbrev-ref HEAD)" != "master" ]; then exit 1; fi
+	# Make sure we're on the main branch
+	@if [ "$(shell git rev-parse --abbrev-ref HEAD)" != "main" ]; then exit 1; fi
 	@echo "Tagging v$(VERSION)..."
 	git tag v$(VERSION)
 	git push --tags
@@ -147,14 +147,14 @@ tag: banner
 
 ## Package 
 package: setup.py
-	@if [ "$(shell git rev-parse --abbrev-ref HEAD)" != "master" ]; then exit 1; fi
+	@if [ "$(shell git rev-parse --abbrev-ref HEAD)" != "main" ]; then exit 1; fi
 	rm -f dist/*
 	python3 setup.py sdist
 	python3 setup.py bdist_wheel --universal
 
 ## Upload to pipy
 pipy: package
-	@if [ "$(shell git rev-parse --abbrev-ref HEAD)" != "master" ]; then exit 1; fi
+	@if [ "$(shell git rev-parse --abbrev-ref HEAD)" != "main" ]; then exit 1; fi
 	twine upload dist/*
 
 
