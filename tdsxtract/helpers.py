@@ -23,7 +23,7 @@ def pos2time(position):
     -------
     array
         Corresponding time shift (in s).
-        
+
     Notes
     -----
     2*position since 2 paths of the laser are shifted on the delay stage
@@ -116,26 +116,12 @@ def fft(time, signal):
 
 def restrict(x, min=None, max=None):
     if max is None:
-        index_max = 0
+        index_max = len(x)
     else:
         index_max = npo.argmin(abs(x - max))
     if min is None:
-        index_min = -1
+        index_min = 0
     else:
         index_min = npo.argmin(abs(x - min))
     x_restrict = x[index_min:index_max]
     return x_restrict, index_min, index_max
-
-
-def ordered_dict_insert(ordered_dict, index, key, value):
-    if key in ordered_dict:
-        raise KeyError("Key already exists")
-    if index < 0 or index > len(ordered_dict):
-        raise IndexError("Index out of range")
-
-    keys = list(ordered_dict.keys())[index:]
-    ordered_dict[key] = value
-    for k in keys:
-        ordered_dict.move_to_end(k)
-
-    return ordered_dict

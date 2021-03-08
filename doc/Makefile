@@ -24,9 +24,12 @@ autodoc:
 	rm -rf source
 	sphinx-apidoc -o source/ ../tdsxtract
 
+
 clean-all: clean
+	rm -rf auto_examples/
 	rm -rf source
 
 
 dochtml: clean-all autodoc html
 	$(MAKE) html
+	

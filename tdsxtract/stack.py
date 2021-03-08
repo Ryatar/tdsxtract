@@ -11,8 +11,6 @@ from jax import grad, jit, vjp
 from jax.config import config
 from scipy.constants import c, epsilon_0, mu_0
 
-from .helpers import ordered_dict_insert
-
 config.update("jax_enable_x64", True)
 
 inv = np.linalg.inv
@@ -196,10 +194,24 @@ def get_coeffs_stack(config):
     # return phi[-1][0], gamma
 
 
-def make_layers(layers, sample):
+def _ordered_dict_insert(ordered_dict, index, key, value):
+    if key in ordered_dict:
+        raise KeyError("Key already exists")
+    if index < 0 or index > len(ordered_dict):
+        raise IndexError("Index out of range")
+
+    keys = list(ordered_dict.keys())[index:]
+    ordered_dict[key] = value
+    for k in keys:
+        ordered_dict.move_to_end(k)
+
+    return ordered_dict
+
+
+def _make_layers(layers, sample):
     new = layers.copy()
     for i, lays in enumerate(sample.items()):
-        new = ordered_dict_insert(layers, i + 1, *lays)
+        new = _ordered_dict_insert(layers, i + 1, *lays)
     return new
 
 
@@ -218,7 +230,7 @@ def get_transmission(sample, lambda0):
         }
     )
 
-    layers = make_layers(layers, sample)
+    layers = _make_layers(layers, sample)
 
     config = dict(layers=layers, wave=wave)
 
@@ -226,59 +238,60 @@ def get_transmission(sample, lambda0):
     return out[0][-1][0]
 
 
-if __name__ == "__main__":
-
-    layers = OrderedDict(
-        {
-            "superstrate": {"epsilon": 1, "mu": 1},
-            "layer": {"epsilon": 1, "mu": 1, "thickness": 500},
-            "substrate": {"epsilon": 1, "mu": 1.0},
-        }
-    )
-
-    wave_params = {
-        "lambda0": 1.1,
-        "theta0": 0.0 * pi,
-        "phi0": 0 * pi / 3,
-        "psi0": 0 * pi,
-    }
-
-    config = layers, wave_params
-
-    def f(eps_re, eps_im, config):
-        eps = eps_re + 1j * eps_im
-        config[0]["layer"]["epsilon"] = eps
-        out, gamma = get_coeffs_stack(config)
-        return out
-
-    def fre(eps_re, eps_im, config):
-        return f(eps_re, eps_im, config).real
-
-    def fim(eps_re, eps_im, config):
-        return f(eps_re, eps_im, config).imag
-
-    # f(12)
-
-    dfre_epsre = jit(grad(fre, 0))
-    dfre_epsim = jit(grad(fre, 1))
-    dfim_epsre = jit(grad(fim, 0))
-    dfim_epsim = jit(grad(fim, 1))
-    dfre_epsre(12.3, 1.2, config)
-    dfre_epsim(12.3, 1.2, config)
-    dfim_epsre(12.3, 1.2, config)
-    dfim_epsim(12.3, 1.2, config)
-
-    def df(eps_re, eps_im, config):
-        df_epsre = dfre_epsre(eps_re, eps_im, config) + 1j * dfim_epsre(
-            eps_re, eps_im, config
-        )
-        df_epsim = dfre_epsim(eps_re, eps_im, config) + 1j * dfim_epsim(
-            eps_re, eps_im, config
-        )
-        return np.array([df_epsre, df_epsim])
-
-    #
-    # q = vjp(f,12.3,12.2)
-    #
-    # df_epe_re = grad(f,0)
-    # df_epe_im = grad(f,1)
+#
+# if __name__ == "__main__":
+#
+#     layers = OrderedDict(
+#         {
+#             "superstrate": {"epsilon": 1, "mu": 1},
+#             "layer": {"epsilon": 1, "mu": 1, "thickness": 500},
+#             "substrate": {"epsilon": 1, "mu": 1.0},
+#         }
+#     )
+#
+#     wave_params = {
+#         "lambda0": 1.1,
+#         "theta0": 0.0 * pi,
+#         "phi0": 0 * pi / 3,
+#         "psi0": 0 * pi,
+#     }
+#
+#     config = layers, wave_params
+#
+#     def f(eps_re, eps_im, config):
+#         eps = eps_re + 1j * eps_im
+#         config[0]["layer"]["epsilon"] = eps
+#         out, gamma = get_coeffs_stack(config)
+#         return out
+#
+#     def fre(eps_re, eps_im, config):
+#         return f(eps_re, eps_im, config).real
+#
+#     def fim(eps_re, eps_im, config):
+#         return f(eps_re, eps_im, config).imag
+#
+#     # f(12)
+#
+#     dfre_epsre = jit(grad(fre, 0))
+#     dfre_epsim = jit(grad(fre, 1))
+#     dfim_epsre = jit(grad(fim, 0))
+#     dfim_epsim = jit(grad(fim, 1))
+#     dfre_epsre(12.3, 1.2, config)
+#     dfre_epsim(12.3, 1.2, config)
+#     dfim_epsre(12.3, 1.2, config)
+#     dfim_epsim(12.3, 1.2, config)
+#
+#     def df(eps_re, eps_im, config):
+#         df_epsre = dfre_epsre(eps_re, eps_im, config) + 1j * dfim_epsre(
+#             eps_re, eps_im, config
+#         )
+#         df_epsim = dfre_epsim(eps_re, eps_im, config) + 1j * dfim_epsim(
+#             eps_re, eps_im, config
+#         )
+#         return np.array([df_epsre, df_epsim])
+#
+#     #
+#     # q = vjp(f,12.3,12.2)
+#     #
+#     # df_epe_re = grad(f,0)
+#     # df_epe_im = grad(f,1)

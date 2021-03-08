@@ -27,8 +27,13 @@ def sample_transmission(epsilons, thickness, sample=None, wavelengths=None):
 
 
 @jit
-def fmini(
-    x, sample=None, t_exp=None, wavelengths=None, weights=(1, 0), opt_thickness=None,
+def _fmini(
+    x,
+    sample=None,
+    t_exp=None,
+    wavelengths=None,
+    weights=(1, 0),
+    opt_thickness=None,
 ):
     unknown = "unknown"
     nl = len(wavelengths)
@@ -41,7 +46,7 @@ def fmini(
         x_ = x
     epsilon = x_[:nl] + 1j * x_[nl:]
     gamma = 2 * pi / wavelengths
-    thickness_tot = sum([k["thickness"] for lay, k in sample.items()])
+    thickness_tot = np.sum(np.array([k["thickness"] for lay, k in sample.items()]))
     phasor = np.exp(-1j * gamma * thickness_tot)
     t_exp_phased = t_exp * phasor
 
@@ -64,13 +69,11 @@ def fmini(
     return mse
 
 
-jac_ = grad(fmini)
-
-jit_gfunc = jit(jac_)
+_jit_gfunc = jit(grad(_fmini))
 
 
-def jac(x, **kwargs):
-    return npo.array(jit_gfunc(x, **kwargs))
+def _jac(x, **kwargs):
+    return npo.array(_jit_gfunc(x, **kwargs))
 
 
 def extract(
@@ -83,7 +86,7 @@ def extract(
     eps_im_min=None,
     eps_im_max=None,
     thickness_tol=0,
-    opt_thickness=None,
+    opt_thickness=False,
     weight=1,
 ):
 
@@ -105,32 +108,34 @@ def extract(
 
     hmin, hmax = (1 - thickness_tol) * h, (1 + thickness_tol) * h
     x0 = [eps_re0, eps_im0]
-    if opt_thickness != None:
+    if opt_thickness:
         x0.append(h)
     initial_guess = npo.float64(npo.hstack(x0))
     bounds = [(eps_re_min, eps_re_max) for i in range(nl)]
     bounds += [(eps_im_min, eps_im_max) for i in range(nl)]
-    if opt_thickness != None:
+    if opt_thickness:
         bounds += [(hmin, hmax)]
     bounds = npo.float64(bounds)
 
     weights = (float(weight), float(1 - weight))
 
-    fmini_opt = lambda x: fmini(
+    optthick = True if opt_thickness else None
+
+    fmini_opt = lambda x: _fmini(
         x,
         sample=sample,
         weights=weights,
         t_exp=t_exp,
         wavelengths=wavelengths,
-        opt_thickness=opt_thickness,
+        opt_thickness=optthick,
     )
-    jac_opt = lambda x: jac(
+    jac_opt = lambda x: _jac(
         x,
         sample=sample,
         weights=weights,
         t_exp=t_exp,
         wavelengths=wavelengths,
-        opt_thickness=opt_thickness,
+        opt_thickness=optthick,
     )
 
     options = {
@@ -155,7 +160,7 @@ def extract(
         jac=jac_opt,
         method="L-BFGS-B",
     )
-    if opt_thickness != None:
+    if opt_thickness:
         h_opt = opt.x[-1]
         _epsopt = opt.x[:-1]
     else:

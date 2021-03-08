@@ -3,19 +3,34 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Documentation
-=============
+
+Welcome! This is the documentation for tdsxtract |release|, last updated on |today|.
+
+
 
 .. toctree::
    :maxdepth: 2
-   :caption: Contents:
+   :caption: Quickstart
+   
+   quickstart
+   
+   
+.. toctree::
+   :maxdepth: 2
+   :caption: Examples
 
-Installation
-============
+   auto_examples/index
 
-.. code-block:: bash
+   
+   
+.. toctree::
+  :maxdepth: 2
+  :caption: API reference:
+  :hidden:
+  
+  source/modules
 
-  pip install tdsxtract
+
 
 
 Indices and tables

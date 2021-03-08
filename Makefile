@@ -1,7 +1,7 @@
 
 SHELL := /bin/bash
 
-.PHONY: clean lint req doc
+.PHONY: clean lint req doc test
 
 #################################################################################
 # GLOBALS                                                                       #
@@ -114,17 +114,17 @@ save: clean style gl
 
 ## Install requirements for building doc
 doc-req:
-	cd doc && pip install -r requirements.tx
+	cd doc && pip install -r requirements.txt
 
 
 ## Build html doc
-doc: less
+doc:
 	cd doc && make dochtml
 
 # 
 # 
 # ## Build html doc (without examples)
-# doc-noplot: less
+# doc-noplot:
 # 	cd doc && make clean && make html-noplot && make postpro-html
 
 
