@@ -28,7 +28,7 @@ def pos2time(position):
     -----
     2*position since 2 paths of the laser are shifted on the delay stage
 
-    """
+    """ 
     time = 2 * position / c
     return time
 
